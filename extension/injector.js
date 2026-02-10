@@ -104,6 +104,25 @@
     });
   }
 
+  // ========== 提取 cookies ==========
+  function extractCookies() {
+    var cookies = {};
+    try {
+      var cookieStr = document.cookie;
+      if (cookieStr) {
+        cookieStr.split(';').forEach(function(pair) {
+          var parts = pair.trim().split('=');
+          if (parts.length >= 2) {
+            cookies[parts[0]] = parts.slice(1).join('=');
+          }
+        });
+      }
+    } catch(e) {
+      console.error(TAG, 'extractCookies error:', e);
+    }
+    return cookies;
+  }
+
   // ========== 消息处理 ==========
   window.addEventListener('message', function(event) {
     if (event.source !== window) return;
@@ -142,6 +161,16 @@
         }, '*');
         break;
 
+      case 'GET_COOKIES':
+        var cookies = extractCookies();
+        window.postMessage({
+          from: 'arena2api-injector',
+          type: 'COOKIES_OK',
+          rid: rid,
+          cookies: cookies,
+        }, '*');
+        break;
+
       case 'CHECK':
         var g = window.grecaptcha && window.grecaptcha.enterprise
           ? window.grecaptcha.enterprise
@@ -161,12 +190,14 @@
   // 延迟一下确保 content.js 已经在监听
   setTimeout(function() {
     var models = extractModels();
+    var cookies = extractCookies();
     window.postMessage({
       from: 'arena2api-injector',
       type: 'INIT',
       models: models,
+      cookies: cookies,
     }, '*');
-    console.log(TAG, 'Injector ready, models:', models ? models.length : 0);
+    console.log(TAG, 'Injector ready, models:', models ? models.length : 0, 'cookies:', Object.keys(cookies).join(', '));
   }, 1000);
 
 })();

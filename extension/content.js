@@ -49,11 +49,12 @@
 
     // INIT 消息（无 rid）
     if (msg.type === 'INIT') {
-      console.log(TAG, 'Injector initialized, models:', msg.models ? msg.models.length : 0);
+      console.log(TAG, 'Injector initialized, models:', msg.models ? msg.models.length : 0, 'cookies:', msg.cookies ? Object.keys(msg.cookies).join(', ') : 'none');
       // 通知 background
       chrome.runtime.sendMessage({
         type: 'PAGE_INIT',
         models: msg.models,
+        pageCookies: msg.cookies,
       });
       // 尝试获取初始 token
       setTimeout(function() { fetchAndPushToken(); }, 2000);
@@ -90,6 +91,15 @@
     if (msg.type === 'NEED_MODELS') {
       callInjector('GET_MODELS').then(function(result) {
         sendResponse({ models: result.models });
+      }).catch(function(err) {
+        sendResponse({ error: err.message });
+      });
+      return true;
+    }
+
+    if (msg.type === 'NEED_COOKIES') {
+      callInjector('GET_COOKIES').then(function(result) {
+        sendResponse({ cookies: result.cookies });
       }).catch(function(err) {
         sendResponse({ error: err.message });
       });

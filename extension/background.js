@@ -31,24 +31,75 @@
     tabId: null,
   };
 
+  // ========== 从页面获取 cookies ==========
+  async function requestPageCookies() {
+    if (!state.tabId) return null;
+    try {
+      return await new Promise(function(resolve) {
+        chrome.tabs.sendMessage(state.tabId, { type: 'NEED_COOKIES' }, function(resp) {
+          if (chrome.runtime.lastError || !resp || !resp.cookies) {
+            resolve(null);
+          } else {
+            resolve(resp.cookies);
+          }
+        });
+      });
+    } catch(e) {
+      return null;
+    }
+  }
+
   // ========== Cookie 刷新 ==========
   async function refreshCookies() {
     try {
-      var all = await chrome.cookies.getAll({ domain: 'arena.ai' });
-      var dot = await chrome.cookies.getAll({ domain: '.arena.ai' });
+      var byDomain = await chrome.cookies.getAll({ domain: 'arena.ai' });
+      var byDotDomain = await chrome.cookies.getAll({ domain: '.arena.ai' });
+      var byUrl = await chrome.cookies.getAll({ url: 'https://arena.ai' });
+
+      console.log(TAG, 'chrome.cookies.getAll results:');
+      console.log(TAG, '  domain=arena.ai:', byDomain.length, 'cookies:', byDomain.map(function(c) { return c.name; }).join(', '));
+      console.log(TAG, '  domain=.arena.ai:', byDotDomain.length, 'cookies:', byDotDomain.map(function(c) { return c.name; }).join(', '));
+      console.log(TAG, '  url=https://arena.ai:', byUrl.length, 'cookies:', byUrl.map(function(c) { return c.name; }).join(', '));
+
       state.cookies = {};
-      all.concat(dot).forEach(function(c) {
+      byDomain.concat(byDotDomain).concat(byUrl).forEach(function(c) {
         state.cookies[c.name] = c.value;
       });
+
+      // 尝试从页面获取 document.cookie（可以读取非 HttpOnly cookies）
+      var pageCookies = await requestPageCookies();
+      if (pageCookies) {
+        console.log(TAG, 'Page cookies:', Object.keys(pageCookies).join(', '));
+        // 合并页面 cookies
+        for (var k in pageCookies) {
+          if (!state.cookies[k]) {
+            state.cookies[k] = pageCookies[k];
+          }
+        }
+      }
+
+      console.log(TAG, 'All cookies:', Object.keys(state.cookies).join(', '));
+
       state.cfClearance = state.cookies['cf_clearance'] || '';
-      // auth token 可能分片
+
+      // auth token 可能分片存储
       var auth = state.cookies['arena-auth-prod-v1'] || '';
       if (!auth) {
         var p0 = state.cookies['arena-auth-prod-v1.0'] || '';
         var p1 = state.cookies['arena-auth-prod-v1.1'] || '';
-        if (p0) auth = p0 + (p1 || '');
+        console.log(TAG, 'Checking fragmented auth cookies - p0:', !!p0, 'p1:', !!p1);
+        if (p0) {
+          auth = p0 + (p1 || '');
+          console.log(TAG, 'Combined auth token length:', auth.length);
+        }
       }
       state.authToken = auth;
+
+      if (auth) {
+        console.log(TAG, 'Auth Cookie found! Length:', auth.length, 'Preview:', auth.substring(0, 50) + '...');
+      } else {
+        console.log(TAG, 'Auth Cookie NOT found. Available cookies:', Object.keys(state.cookies));
+      }
     } catch(e) {
       console.error(TAG, 'Cookie error:', e);
     }
@@ -157,6 +208,26 @@
         if (msg.models && msg.models.length > 0) {
           state.models = msg.models;
           console.log(TAG, 'Models received:', msg.models.length);
+        }
+        if (msg.pageCookies) {
+          console.log(TAG, 'Page cookies received:', Object.keys(msg.pageCookies).join(', '));
+          // 合并页面 cookies
+          for (var k in msg.pageCookies) {
+            if (!state.cookies[k]) {
+              state.cookies[k] = msg.pageCookies[k];
+            }
+          }
+          // 重新检查 auth token
+          var auth = state.cookies['arena-auth-prod-v1'] || '';
+          if (!auth) {
+            var p0 = state.cookies['arena-auth-prod-v1.0'] || '';
+            var p1 = state.cookies['arena-auth-prod-v1.1'] || '';
+            if (p0) {
+              auth = p0 + (p1 || '');
+              state.authToken = auth;
+              console.log(TAG, 'Auth token updated from page cookies! Length:', auth.length);
+            }
+          }
         }
         pushToServer();
         sendResponse({ ok: true });
