@@ -87,7 +87,7 @@ flowchart TD
 ### 前置要求
 
 - Python 3.8+
-- Chrome 浏览器
+- Chrome 或 Firefox 浏览器
 - 一个 [arena.ai](https://arena.ai) 账号（免费注册）
 
 ### Step 1: 启动服务器
@@ -99,12 +99,20 @@ python server.py
 
 服务器默认监听 `http://localhost:9090`，启动后会等待扩展连接。
 
-### Step 2: 安装 Chrome 扩展
+### Step 2: 安装浏览器扩展
+
+#### Chrome 扩展
 
 1. 打开 Chrome，地址栏输入 `chrome://extensions/`
 2. 开启右上角的 **开发者模式**
 3. 点击 **加载已解压的扩展程序**
 4. 选择项目中的 `extension/` 目录
+
+#### Firefox 扩展
+
+1. 打开 Firefox，地址栏输入 `about:debugging#/runtime/this-firefox`
+2. 点击 **临时载入附加组件**
+3. 选择项目中的 `extension-firefox/manifest.json` 文件
 
 ### Step 3: 连接 Arena.ai
 
@@ -162,6 +170,20 @@ for chunk in response:
         print(chunk.choices[0].delta.content, end="")
 ```
 
+### 支持的客户端
+
+本服务兼容以下客户端和API网关：
+
+- **OpenAI SDK** - 标准 OpenAI 格式
+- **Claude Code** - Anthropic Claude 客户端
+- **Gemini API** - Google Gemini 客户端
+- **Codex** - OpenAI Codex 客户端
+- **OpenCode** - 开源代码助手
+- **NewAPI** - OpenAI API 网关
+- **OneAPI** - 统一 API 网关
+
+服务器会自动检测客户端类型（通过 User-Agent）并适配相应的响应格式。
+
 ## API 端点
 
 | 端点 | 方法 | 说明 |
@@ -185,6 +207,14 @@ for chunk in response:
 
 点击扩展图标，在弹窗中可修改 **Server URL**（默认 `http://127.0.0.1:9090`）。
 
+### Chrome vs Firefox 差异
+
+| 特性 | Chrome 扩展 | Firefox 扩展 |
+|------|------------|-------------|
+| Manifest 版本 | V3 (Service Worker) | V2 (Background Script) |
+| API 命名空间 | `chrome.*` | `browser.*` (兼容 `chrome.*`) |
+| 目录 | `extension/` | `extension-firefox/` |
+
 ## 项目结构
 
 ```
@@ -197,6 +227,13 @@ arena2api/
 │   ├── content.js         # Content Script (ISOLATED) — injector ↔ background 消息桥
 │   ├── injector.js        # Page Script (MAIN) — reCAPTCHA 调用、模型提取、cookie 读取
 │   ├── popup.html/js      # 扩展弹窗 UI（状态监控、手动操作）
+│   └── icons/             # 扩展图标
+├── extension-firefox/     # Firefox 扩展 (Manifest V2)
+│   ├── manifest.json      # Firefox 扩展清单
+│   ├── background.js      # Background Script — 兼容 Firefox API
+│   ├── content.js         # Content Script — 兼容 Firefox API
+│   ├── injector.js        # Page Script（与 Chrome 版本相同）
+│   ├── popup.html/js      # 扩展弹窗 UI
 │   └── icons/             # 扩展图标
 └── README.md
 ```

@@ -247,6 +247,21 @@ async def list_models():
     return {"object": "list", "data": data}
 
 
+def detect_client(request: Request) -> str:
+    """检测客户端类型"""
+    ua = request.headers.get("user-agent", "").lower()
+    if "claude" in ua or "anthropic" in ua:
+        return "claude"
+    if "gemini" in ua or "google" in ua:
+        return "gemini"
+    if "codex" in ua:
+        return "codex"
+    if "opencode" in ua:
+        return "opencode"
+    # NewAPI/OneAPI 通常使用标准 OpenAI 格式
+    return "openai"
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     """OpenAI 兼容的聊天补全"""
@@ -255,6 +270,7 @@ async def chat_completions(request: Request):
     except Exception:
         raise HTTPException(400, "Invalid JSON")
 
+    client_type = detect_client(request)
     model_name = body.get("model", "")
     messages = body.get("messages", [])
     stream = body.get("stream", False)
@@ -378,7 +394,7 @@ async def chat_completions(request: Request):
 
     if stream:
         return StreamingResponse(
-            stream_response(url, arena_payload, headers, model_name, eval_id),
+            stream_response(url, arena_payload, headers, model_name, eval_id, client_type),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -387,10 +403,10 @@ async def chat_completions(request: Request):
             },
         )
     else:
-        return await non_stream_response(url, arena_payload, headers, model_name, eval_id)
+        return await non_stream_response(url, arena_payload, headers, model_name, eval_id, client_type)
 
 
-async def stream_response(url, payload, headers, model_name, eval_id):
+async def stream_response(url, payload, headers, model_name, eval_id, client_type="openai"):
     """流式响应生成器"""
     chat_id = f"chatcmpl-{eval_id}"
     created = int(time.time())
@@ -481,6 +497,9 @@ async def stream_response(url, payload, headers, model_name, eval_id):
                                 "finish_reason": None,
                             }],
                         }
+                        # Claude/Anthropic 格式兼容
+                        if client_type == "claude":
+                            chunk["type"] = "content_block_delta"
                         yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
                     if reasoning is not None:
@@ -531,7 +550,7 @@ async def stream_response(url, payload, headers, model_name, eval_id):
         yield "data: [DONE]\n\n"
 
 
-async def non_stream_response(url, payload, headers, model_name, eval_id):
+async def non_stream_response(url, payload, headers, model_name, eval_id, client_type="openai"):
     """非流式响应"""
     content_parts = []
     reasoning_parts = []
@@ -601,7 +620,7 @@ async def non_stream_response(url, payload, headers, model_name, eval_id):
     if full_reasoning:
         message["reasoning_content"] = full_reasoning
 
-    return {
+    response = {
         "id": f"chatcmpl-{eval_id}",
         "object": "chat.completion",
         "created": int(time.time()),
@@ -617,6 +636,14 @@ async def non_stream_response(url, payload, headers, model_name, eval_id):
             "total_tokens": 0,
         },
     }
+
+    # Claude 格式兼容
+    if client_type == "claude":
+        response["type"] = "message"
+        response["role"] = "assistant"
+        response["content"] = [{"type": "text", "text": full_content}]
+
+    return response
 
 
 # ============================================================
