@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+
+# 扩展源码（不需要打包进 Docker）
+extension-firefox/
+extension/
+
+# 脚本（Windows 编排脚本）
+scripts/
+
+# 环境
+.env
+.env.example
+.venv/
+__pycache__/
+*.pyc
+
+# 文档
+README.md
+LICENSE
+*.md
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# IDE
+.vscode/
+.idea/

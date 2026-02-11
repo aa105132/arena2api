@@ -1,7 +1,9 @@
 /**
- * Arena2API - Content Script (ISOLATED world) - Firefox
+ * Arena2API - Content Script (ISOLATED world) - Firefox v2.0
  *
- * 消息桥梁：injector.js <-> content.js <-> background.js
+ * 负责：
+ * 1. 将 injector.js 注入到页面 MAIN world（通过 <script> 标签）
+ * 2. 作为消息桥梁：injector.js (MAIN) <-> content.js (ISOLATED) <-> background.js (BG)
  */
 (function() {
   'use strict';
@@ -10,6 +12,26 @@
   var api = typeof browser !== 'undefined' ? browser : chrome;
   var rid = 0;
   var pending = {};  // rid -> {resolve, reject, timer}
+
+  // ========== 注入 injector.js 到 MAIN world ==========
+  // Firefox MV2 不支持 "world": "MAIN"，需要通过 <script> 标签注入
+  function injectMainWorldScript() {
+    try {
+      var script = document.createElement('script');
+      script.src = api.runtime.getURL('injector.js');
+      script.onload = function() {
+        script.remove();
+        console.log(TAG, 'Injector loaded into MAIN world');
+      };
+      script.onerror = function() {
+        console.error(TAG, 'Failed to load injector.js');
+        script.remove();
+      };
+      (document.head || document.documentElement).appendChild(script);
+    } catch(e) {
+      console.error(TAG, 'Inject error:', e);
+    }
+  }
 
   // ========== 向 injector.js 发消息 ==========
   function callInjector(type, data) {
@@ -50,14 +72,13 @@
 
     // INIT 消息（无 rid）
     if (msg.type === 'INIT') {
-      console.log(TAG, 'Injector initialized, models:', msg.models ? msg.models.length : 0, 'cookies:', msg.cookies ? Object.keys(msg.cookies).join(', ') : 'none');
-      // 通知 background
+      console.log(TAG, 'Injector initialized, models:', msg.models ? msg.models.length : 0);
       api.runtime.sendMessage({
         type: 'PAGE_INIT',
         models: msg.models,
         pageCookies: msg.cookies,
       });
-      // 尝试获取初始 token
+      // 获取初始 token
       setTimeout(function() { fetchAndPushToken(); }, 2000);
     }
   });
@@ -118,14 +139,19 @@
   });
 
   // ========== 初始化 ==========
-  console.log(TAG, 'Content script loaded');
+  console.log(TAG, 'Content script v2.0 loaded');
+
+  // 注入 injector.js 到 MAIN world
+  injectMainWorldScript();
+
+  // 通知 background
   api.runtime.sendMessage({ type: 'TAB_READY' });
 
-  // 定期检查 reCAPTCHA 是否可用，获取 token
+  // 定期检查 reCAPTCHA 是否可用
   var checkCount = 0;
   var checker = setInterval(function() {
     checkCount++;
-    if (checkCount > 30) {  // 60秒后停止
+    if (checkCount > 30) {
       clearInterval(checker);
       return;
     }

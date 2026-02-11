@@ -1,0 +1,68 @@
+# Arena2API - Docker Compose 部署模板
+# 
+# 使用方法:
+#   1. 复制 .env.example 为 .env 并填写配置
+#   2. docker compose up -d
+#   3. 在 Windows VPS 上运行 Firefox 扩展，推送到此服务器
+#
+# 架构:
+#   [Linux VPS: Docker 容器运行 server.py] <--- HTTP Push --- [Windows VPS: Firefox 浏览器 + 扩展]
+#   [用户] ---> OpenAI API 格式请求 ---> [Linux VPS: server.py]
+
+version: "3.8"
+
+services:
+  arena2api:
+    build: .
+    container_name: arena2api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-9090}:${PORT:-9090}"
+    environment:
+      # 服务器监听端口
+      - PORT=${PORT:-9090}
+      
+      # API Key 认证（逗号分隔，留空则不鉴权）
+      # 示例: sk-mykey1,sk-mykey2,sk-shared-key
+      - API_KEYS=${API_KEYS:-}
+      
+      # 扩展推送密钥（留空则不验证扩展身份）
+      - EXTENSION_SECRET=${EXTENSION_SECRET:-}
+      
+      # 每个 Profile 的 token 池上限
+      - TOKEN_POOL_MAX=${TOKEN_POOL_MAX:-30}
+      
+      # Token 过期时间（毫秒），reCAPTCHA token 约 120s 有效
+      - TOKEN_EXPIRY_MS=${TOKEN_EXPIRY_MS:-110000}
+      
+      # Profile 超时时间（秒），超过此时间无推送则标记为不活跃
+      - PROFILE_TIMEOUT_S=${PROFILE_TIMEOUT_S:-120}
+      
+      # 调试模式
+      - DEBUG=${DEBUG:-}
+      - PROMPT_DEBUG=${PROMPT_DEBUG:-}
+    
+    # 资源限制（适用于低配 VPS）
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 64M
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-9090}/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

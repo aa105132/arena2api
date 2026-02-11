@@ -1,15 +1,17 @@
 {
   "manifest_version": 2,
   "name": "Arena2API",
-  "version": "1.0.0",
-  "description": "Bridge between arena.ai and OpenAI-compatible API",
+  "version": "2.0.0",
+  "description": "Bridge between arena.ai and OpenAI-compatible API (Multi-Profile)",
   "permissions": [
     "cookies",
     "storage",
     "https://arena.ai/*",
     "https://*.arena.ai/*",
     "http://127.0.0.1:*/*",
-    "http://localhost:*/*"
+    "http://localhost:*/*",
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "scripts": ["background.js"]
@@ -20,13 +22,10 @@
       "js": ["content.js"],
       "run_at": "document_idle",
       "all_frames": false
-    },
-    {
-      "matches": ["https://arena.ai/*"],
-      "js": ["injector.js"],
-      "run_at": "document_idle",
-      "all_frames": false
     }
+  ],
+  "web_accessible_resources": [
+    "injector.js"
   ],
   "browser_action": {
     "default_popup": "popup.html",
